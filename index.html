@@ -447,20 +447,22 @@ function showToastInfo(msg){
 }
 
 // ── REALTIME LISTENER ─────────────────────────────────────────────────────────
+let _realtimeChannel = null;
 function startRealtimeSync(){
-  db.channel('kri-realtime')
+  if(_realtimeChannel) return; // Jangan dobel subscribe
+  _realtimeChannel = db.channel('kri-realtime-'+Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'kri_data'},async(payload)=>{
-      const updatedBy = payload.new?.updated_by||'';
-      const myName = CURRENT_USER?CURRENT_USER.nama:'';
-      // Jangan reload jika perubahan dari diri sendiri
-      if(updatedBy && updatedBy===myName) return;
-      // Reload data dari Supabase
+      // Reload semua data terbaru dari Supabase
       const {data} = await db.from('kri_data').select('*').eq('deleted',false);
       if(data && data.length>0){
         KRI_DATA = data;
         renderCurrentPage();
         updateBadges();
-        showToastInfo('🔄 Data diperbarui oleh '+updatedBy);
+        const updatedBy = payload.new?.updated_by||'';
+        const myName = CURRENT_USER?CURRENT_USER.nama:'';
+        if(updatedBy && updatedBy!==myName){
+          showToastInfo('🔄 Data diperbarui oleh '+updatedBy);
+        }
       }
     })
     .subscribe();
@@ -474,7 +476,12 @@ function isRM(){return CUR_ROLE==='rm';}
 function getMyOwners(){return ROLE_OWNERS[CUR_ROLE]||null;}
 function isMyKRI(k){
   if(!k||isRM())return true;
-  // Primary: match current logged-in user's name directly
+  // Cek berdasarkan divisi user (paling akurat untuk KRI baru)
+  if(CURRENT_USER&&CURRENT_USER.divisi){
+    const myDivisi=CURRENT_USER.divisi.trim().toLowerCase();
+    if(k.divisi&&k.divisi.split(',').map(s=>s.trim().toLowerCase()).some(d=>d===myDivisi||d.includes(myDivisi)||myDivisi.includes(d)))return true;
+  }
+  // Cek berdasarkan nama risk owner
   if(CURRENT_USER&&CURRENT_USER.nama){
     const myName=CURRENT_USER.nama.trim();
     if(k.risk_owner&&k.risk_owner.split(',').map(s=>s.trim()).some(ro=>ro===myName||ro.startsWith(myName.split(' ')[0])))return true;
@@ -1773,14 +1780,17 @@ function doLogin(){
     return;
   }
   err.style.display='none';
+  // Simpan session agar tidak logout saat refresh
+  localStorage.setItem('kri_session', JSON.stringify({username:found.username,password:found.password}));
+  activateUser(found);
+}
+
+function activateUser(found){
   CURRENT_USER=found;
   found.lastLogin=new Date().toLocaleString('id-ID');
   saveUsers();
-  // Set role from user
   CUR_ROLE=found.role;
-  // Call switchRole to update all UI
   switchRole(found.role);
-  // Force update sidebar info with actual name
   const snEl=document.getElementById('sb-role-name');
   if(snEl)snEl.textContent=found.nama;
   const slEl=document.getElementById('sb-role-label');
@@ -1789,10 +1799,8 @@ function doLogin(){
   if(avEl){const ini=found.nama.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();avEl.textContent=ini;}
   const unEl=document.getElementById('topbar-username');
   if(unEl)unEl.textContent=found.nama;
-  // Update sidebar name
   document.getElementById('sb-role-name').textContent=found.nama;
   document.getElementById('sb-role-label').textContent=ROLE_LABELS[found.role]||found.role;
-  // Add logout button to topbar if not exists
   if(!document.getElementById('btn-logout')){
     const tb=document.querySelector('.tb-r');
     const btn=document.createElement('button');
@@ -1800,17 +1808,16 @@ function doLogin(){
     btn.textContent='&#128275; Logout';btn.onclick=doLogout;
     tb.appendChild(btn);
   }
-  // Show main shell, hide login
   document.getElementById('login-page').style.display='none';
   document.getElementById('main-shell').style.display='flex';
   addTrail('LOGIN',0,'Login: '+found.nama+' ('+found.role+')');
-  save();
   startRealtimeSync();
   showPage('dashboard');
 }
 
 function doLogout(){
   CURRENT_USER=null;
+  localStorage.removeItem('kri_session');
   document.getElementById('main-shell').style.display='none';
   document.getElementById('login-page').style.display='flex';
   document.getElementById('login-user').value='';
@@ -2246,6 +2253,20 @@ async function initDashboard(){
   document.getElementById('kri-all-filters').innerHTML='';
   document.getElementById('kri-entity-filters').innerHTML='';
   document.getElementById('kri-ops-filters').innerHTML='';
+
+  // Coba restore session dari localStorage agar tidak logout saat refresh
+  const savedSession = localStorage.getItem('kri_session');
+  if(savedSession){
+    try{
+      const sess = JSON.parse(savedSession);
+      const found = USERS.find(u=>u.username===sess.username&&u.password===sess.password&&u.aktif);
+      if(found){
+        activateUser(found);
+        return; // Sudah login, skip halaman login
+      }
+    }catch(e){}
+  }
+  // Tidak ada session — tampilkan halaman login
   document.getElementById('login-page').style.display='flex';
   document.getElementById('main-shell').style.display='none';
 }
