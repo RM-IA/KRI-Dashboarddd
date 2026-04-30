@@ -409,35 +409,38 @@ async function save(){
 
 async function load(){
   try{
-    // Coba load dari Supabase
+    // Load dari Supabase — sumber kebenaran utama
     const {data, error} = await db.from('kri_data').select('*').eq('deleted',false);
-    if(error || !data || data.length===0){
-      // Fallback ke localStorage jika Supabase kosong
-      const d=localStorage.getItem('kri_v4');
-      if(d) KRI_DATA=JSON.parse(d);
-      // Jika ada data lokal, upload ke Supabase
-      if(KRI_DATA.length>0){
-        await db.from('kri_data').upsert(KRI_DATA.map(k=>({...k, updated_at: new Date().toISOString()})),{onConflict:'id'});
-        showToastInfo('Data lokal berhasil disinkronkan ke server ☁️');
+    if(!error && data && data.length>0){
+      // Supabase punya data → pakai itu, hapus localStorage lama
+      KRI_DATA = data;
+      localStorage.removeItem('kri_v4');
+    } else if(!error && data && data.length===0){
+      // Supabase kosong → ini pertama kali, upload DEFAULT_KRI
+      const alreadySeeded = localStorage.getItem('kri_seeded');
+      if(!alreadySeeded){
+        await db.from('kri_data').upsert(
+          DEFAULT_KRI.map(k=>({...k, updated_at: new Date().toISOString(), updated_by:'system'})),
+          {onConflict:'id'}
+        );
+        localStorage.setItem('kri_seeded','1');
+        KRI_DATA = JSON.parse(JSON.stringify(DEFAULT_KRI));
+      } else {
+        KRI_DATA = JSON.parse(JSON.stringify(DEFAULT_KRI));
       }
     } else {
-      KRI_DATA = data;
+      // Error koneksi → pakai DEFAULT_KRI saja, jangan pakai localStorage lama
+      console.warn('Supabase error, pakai default:', error);
+      KRI_DATA = JSON.parse(JSON.stringify(DEFAULT_KRI));
     }
     // Load audit trail
     const {data:trail} = await db.from('audit_trail').select('*').order('id',{ascending:false}).limit(200);
     if(trail && trail.length>0){
       AUDIT_TRAIL = trail.map(t=>({id:t.id,ts:t.ts,user:t.user_name,action:t.action,desc:t.deskripsi}));
-    } else {
-      const t=localStorage.getItem('kri_trail_v4');
-      if(t) AUDIT_TRAIL=JSON.parse(t);
     }
   }catch(e){
     console.error('Load error:',e);
-    // Fallback ke localStorage
-    try{
-      const d=localStorage.getItem('kri_v4');if(d)KRI_DATA=JSON.parse(d);
-      const t=localStorage.getItem('kri_trail_v4');if(t)AUDIT_TRAIL=JSON.parse(t);
-    }catch(e2){}
+    KRI_DATA = JSON.parse(JSON.stringify(DEFAULT_KRI));
   }
 }
 
@@ -1744,18 +1747,15 @@ let CURRENT_USER = null;
 async function loadUsers(){
   try{
     const {data,error}=await db.from('kri_users').select('*');
-    if(data && data.length>0){
+    if(!error && data && data.length>0){
+      // Pakai data user dari Supabase
       USERS=data.map(u=>({...u,lastLogin:u.last_login||''}));
-    } else {
-      // Fallback localStorage
-      const u=localStorage.getItem('kri_users');if(u)USERS=JSON.parse(u);
-      // Upload default users ke Supabase
-      if(USERS.length>0){
-        await db.from('kri_users').upsert(USERS.map(u=>({...u,last_login:u.lastLogin||''})),{onConflict:'id'});
-      }
+      localStorage.removeItem('kri_users');
     }
+    // Kalau Supabase kosong atau error, tetap pakai USERS default yang sudah ada di kode
   }catch(e){
-    const u=localStorage.getItem('kri_users');if(u)USERS=JSON.parse(u);
+    console.warn('loadUsers error:', e);
+    // Tetap pakai USERS default dari kode
   }
 }
 async function saveUsers(){
