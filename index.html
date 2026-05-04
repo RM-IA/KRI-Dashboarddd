@@ -382,8 +382,17 @@ const ROLE_OWNERS = {
 // ── SUPABASE INIT ─────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://dmmlcmpvmmvvtnueketj.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbWxjbXB2bW12dnRudWVrZXRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MjUyMTksImV4cCI6MjA5MzEwMTIxOX0.OdhCUPUVlDZR3YvsV_oGmPYqVg4YFNnsBJJToUfQJjQ';
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+let db = null;
+function initSupabase(){
+  try{
+    const { createClient } = supabase;
+    db = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('Supabase initialized OK');
+  }catch(e){
+    console.error('Supabase init failed:', e);
+    alert('Gagal konek ke database. Coba refresh halaman.');
+  }
+}
 
 
 // ── AUTO STATUS FROM THRESHOLD ────────────────────────────────────────────────
@@ -418,6 +427,7 @@ function autoStatusColor(s){return s==='Breach'?'#dc2626':s==='Watch'?'#d97706':
 // ── STORAGE (Supabase) ────────────────────────────────────────────────────────
 async function save(){
   try{
+    if(!db){ localStorage.setItem('kri_v4', JSON.stringify(KRI_DATA)); return; }
     // Upsert semua KRI_DATA ke Supabase
     const payload = KRI_DATA.map(k=>({...k, updated_by: CURRENT_USER?CURRENT_USER.nama:'', updated_at: new Date().toISOString(), tl_approval_status:k.tl_approval_status||'', tl_approved_by:k.tl_approved_by||'', tl_approved_date:k.tl_approved_date||'', tl_reject_reason:k.tl_reject_reason||'', nilai_bulan:k.nilai_bulan||{}, status_bulan:k.status_bulan||{}}));
     const {error} = await db.from('kri_data').upsert(payload, {onConflict:'id'});
@@ -439,6 +449,7 @@ async function save(){
 
 async function load(){
   try{
+    if(!db){ KRI_DATA=JSON.parse(JSON.stringify(DEFAULT_KRI)); return; }
     // Load dari Supabase — sumber kebenaran utama
     const {data, error} = await db.from('kri_data').select('*').eq('deleted',false);
     if(!error && data && data.length>0){
@@ -1858,6 +1869,7 @@ let CURRENT_USER = null;
 
 async function loadUsers(){
   try{
+    if(!db){ return; }
     const {data,error}=await db.from('kri_users').select('*');
     console.log('loadUsers from Supabase:', data?.length||0, 'users, error:', error?.message||'none');
     if(!error && data && data.length>0){
@@ -1911,7 +1923,7 @@ function doLogin(){
   activateUser(found);
 }
 
-function activateUser(found){
+async function activateUser(found){
   CURRENT_USER=found;
   found.lastLogin=new Date().toLocaleString('id-ID');
   saveUsers();
@@ -2396,6 +2408,7 @@ async function initDashboard(){
   document.getElementById('login-page').style.display='flex';
   document.getElementById('main-shell').style.display='none';
 }
+initSupabase();
 initDashboard();
 </script>
 </body>
