@@ -608,21 +608,10 @@ function switchRole(role){
   ['nav-approval','nav-upload-excel','nav-top-risk'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display=isRM()?'':'none';
   });
-  // Hide entity/ops for non-RM, show isi-kri for RO
+  // Hide entity/ops for non-RM, show isi-kri for RO, admin for RM only
   ['nav-kri-entity','nav-kri-ops'].forEach(nid=>{const el=document.getElementById(nid);if(el)el.style.display=isRM()?'':'none';});
   const navIsi=document.getElementById('nav-isi-kri');if(navIsi)navIsi.style.display=isRM()?'none':'';
   const navAdmin=document.getElementById('nav-admin');if(navAdmin)navAdmin.style.display=isRM()?'':'none';
-
-  // isi-kri: show for RO, hide for RM
-  const navIsi=document.getElementById('nav-isi-kri');
-  if(navIsi)navIsi.style.display=isRM()?'none':'';
-  const navAdmin=document.getElementById('nav-admin');
-  if(navAdmin)navAdmin.style.display=isRM()?'':'none';
-  // KRI Entity & Operational: RM-only nav items
-  ['nav-kri-entity','nav-kri-ops'].forEach(nid=>{
-    const el=document.getElementById(nid);
-    if(el)el.style.display=isRM()?'':'none';
-  });
   showPage('dashboard');
 }
 
@@ -1870,15 +1859,20 @@ let CURRENT_USER = null;
 async function loadUsers(){
   try{
     const {data,error}=await db.from('kri_users').select('*');
+    console.log('loadUsers from Supabase:', data?.length||0, 'users, error:', error?.message||'none');
     if(!error && data && data.length>0){
-      // Pakai data user dari Supabase
-      USERS=data.map(u=>({...u,lastLogin:u.last_login||''}));
-      localStorage.removeItem('kri_users');
+      // Map Supabase data — ensure aktif is boolean true
+      USERS=data.map(u=>({
+        ...u,
+        lastLogin:u.last_login||u.lastLogin||'',
+        aktif: u.aktif===true || u.aktif==='true' || u.aktif===1 || u.aktif===undefined || u.aktif===null ? true : false
+      }));
+      console.log('Users loaded from Supabase:', USERS.map(u=>u.username+':'+u.aktif));
+    } else {
+      console.log('Using default USERS (Supabase empty or error)');
     }
-    // Kalau Supabase kosong atau error, tetap pakai USERS default yang sudah ada di kode
   }catch(e){
-    console.warn('loadUsers error:', e);
-    // Tetap pakai USERS default dari kode
+    console.warn('loadUsers error:', e, '— using default USERS');
   }
 }
 async function saveUsers(){
@@ -1896,14 +1890,23 @@ function doLogin(){
   const user=document.getElementById('login-user')?.value?.trim();
   const pass=document.getElementById('login-pass')?.value;
   const err=document.getElementById('login-error');
-  const found=USERS.find(u=>u.username===user&&u.password===pass&&u.aktif);
+  if(!user||!pass){err.style.display='block';err.textContent='Masukkan username dan password.';return;}
+  console.log('Login attempt:', user, '| USERS count:', USERS.length);
+  // More flexible matching: aktif can be true, "true", 1, or undefined (treat as active)
+  const found=USERS.find(u=>{
+    const matchUser = u.username===user;
+    const matchPass = u.password===pass;
+    const isActive = u.aktif===true || u.aktif==='true' || u.aktif===1 || u.aktif===undefined || u.aktif===null;
+    if(matchUser) console.log('User found:', u.username, 'pass match:', matchPass, 'aktif:', u.aktif, 'isActive:', isActive);
+    return matchUser && matchPass && isActive;
+  });
   if(!found){
+    console.log('Login failed. Available users:', USERS.map(u=>u.username+':'+u.aktif));
     err.style.display='block';
-    err.textContent='Username atau password salah, atau akun tidak aktif.';
+    err.textContent='Username atau password salah, atau akun tidak aktif. ('+USERS.length+' users loaded)';
     return;
   }
   err.style.display='none';
-  // Simpan session agar tidak logout saat refresh
   localStorage.setItem('kri_session', JSON.stringify({username:found.username,password:found.password}));
   activateUser(found);
 }
@@ -2382,7 +2385,7 @@ async function initDashboard(){
   if(savedSession){
     try{
       const sess = JSON.parse(savedSession);
-      const found = USERS.find(u=>u.username===sess.username&&u.password===sess.password&&u.aktif);
+      const found = USERS.find(u=>u.username===sess.username&&u.password===sess.password&&(u.aktif===true||u.aktif==='true'||u.aktif===1||u.aktif===undefined||u.aktif===null));
       if(found){
         activateUser(found);
         return; // Sudah login, skip halaman login
