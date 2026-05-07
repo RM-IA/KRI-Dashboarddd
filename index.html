@@ -1163,10 +1163,8 @@ function openEditValueModal(id){
     </select>
     <span style="font-size:11px;color:var(--muted)">Bulan yang ditampilkan: ${months.join(', ')}</span>
   </div>
-  <div class="grid3" style="margin-bottom:14px">
+  <div style="margin-bottom:14px">
     <div class="fg"><label>${months[0]}</label><input type="text" id="qv-m1" value="${nb[months[0]]||''}" placeholder="—"></div>
-    <div class="fg"><label>${months[1]}</label><input type="text" id="qv-m2" value="${nb[months[1]]||''}" placeholder="—"></div>
-    <div class="fg"><label>${months[2]}</label><input type="text" id="qv-m3" value="${nb[months[2]]||''}" placeholder="—"></div>
   </div>
   <div style="height:1px;background:var(--border);margin-bottom:12px"></div>
   <div class="grid2">
@@ -1175,30 +1173,25 @@ function openEditValueModal(id){
     <div class="fg"><label>Tren</label><select id="qv-tren"><option${k.tren==='Stabil'?' selected':''}>Stabil</option><option${k.tren==='Meningkat'?' selected':''}>Meningkat</option><option${k.tren==='Menurun'?' selected':''}>Menurun</option><option${k.tren==='Membaik'?' selected':''}>Membaik</option></select></div>
     <div class="fg"><label>Catatan</label><input type="text" id="qv-catatan" value="${k.catatan||''}"></div>
   </div>`;
-  // Auto-fill posisi terkini from last non-empty month
-  document.getElementById('qv-m3').addEventListener('input',function(){if(this.value)document.getElementById('qv-aktual').value=this.value;});
-  document.getElementById('qv-m2').addEventListener('input',function(){if(this.value&&!document.getElementById('qv-m3').value)document.getElementById('qv-aktual').value=this.value;});
-  document.getElementById('qv-m1').addEventListener('input',function(){if(this.value&&!document.getElementById('qv-m2').value&&!document.getElementById('qv-m3').value)document.getElementById('qv-aktual').value=this.value;});
+  // Auto-fill posisi terkini from month input
+  document.getElementById('qv-m1').addEventListener('input',function(){if(this.value)document.getElementById('qv-aktual').value=this.value;});
   document.getElementById('m-foot').innerHTML=`<button class="btn btn-outline" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveQuickValue(${id})">💾 Simpan</button>`;
   document.getElementById('mover').classList.add('open');
 }
-function saveQuickValue(id){
+async function saveQuickValue(id){
   const k=KRI_DATA.find(x=>x.id===id);if(!k)return;
   const months=getPeriodMonths();
   if(!k.nilai_bulan)k.nilai_bulan={};
+  if(!k.status_bulan)k.status_bulan={};
   const m1=document.getElementById('qv-m1')?.value||'';
-  const m2=document.getElementById('qv-m2')?.value||'';
-  const m3=document.getElementById('qv-m3')?.value||'';
-  if(m1)k.nilai_bulan[months[0]]=m1;
-  if(m2)k.nilai_bulan[months[1]]=m2;
-  if(m3)k.nilai_bulan[months[2]]=m3;
-  // Auto-set nilai_aktual from last non-empty month
-  const lastVal=m3||m2||m1||gv('qv-aktual');
+  if(m1) k.nilai_bulan[months[0]]=m1;
+  const lastVal=m1||gv('qv-aktual');
   const oldStatus=k.status;
   k.nilai_aktual=lastVal;k.status=gv('qv-status');k.tren=gv('qv-tren');k.catatan=gv('qv-catatan');
+  if(m1) k.status_bulan[months[0]]=k.status;
   if(k.approval_status==='Approved'&&k.status!==oldStatus)k.approval_status='Draft';
-  addTrail('EDIT',id,`Update nilai ${k.kode}: ${months[0]}:${m1||'-'} ${months[1]}:${m2||'-'} ${months[2]}:${m3||'-'} (${k.status})`);
-  save();closeModal();toast('✅ Nilai berhasil diupdate');renderCurrentPage();updateBadges();
+  addTrail('EDIT',id,`Update nilai ${k.kode}: ${months[0]}:${m1||'-'} (${k.status})`);
+  await save();closeModal();toast('✅ Nilai berhasil diupdate');renderCurrentPage();updateBadges();
 }
 
 // ── DELETE ────────────────────────────────────────────────────────────────────
@@ -1604,8 +1597,6 @@ function renderApproval(){
       <th style="padding:9px 8px;color:#e2e8f0;font-size:10px">Level</th><th style="padding:9px 8px;color:#e2e8f0;font-size:10px">Divisi</th>
       <th style="padding:9px 8px;color:#e2e8f0;font-size:10px">Risk Owner</th>
       <th style="padding:9px 8px;text-align:center;color:#86efac;font-size:10px">${months[0]}</th>
-      <th style="padding:9px 8px;text-align:center;color:#86efac;font-size:10px">${months[1]}</th>
-      <th style="padding:9px 8px;text-align:center;color:#86efac;font-size:10px">${months[2]}</th>
       <th style="padding:9px 8px;color:#e2e8f0;font-size:10px">Status</th>
       <th style="padding:9px 8px;color:#e2e8f0;font-size:10px">Evidence</th>
       <th style="padding:9px 8px;color:#e2e8f0;font-size:10px;min-width:120px">Aksi</th>
@@ -1619,7 +1610,7 @@ function renderApproval(){
         <td style="padding:8px;border-bottom:1px solid var(--border)"><span class="b ${k.level==='Entity'?'b-blue':'b-teal'}" style="font-size:10px">${k.level}</span></td>
         <td style="font-size:11px;padding:8px;border-bottom:1px solid var(--border)">${trunc(k.divisi,18)}</td>
         <td style="font-size:11px;padding:8px;border-bottom:1px solid var(--border)">${trunc(k.risk_owner,22)}</td>
-        ${stCell(months[0])}${stCell(months[1])}${stCell(months[2])}
+        ${stCell(months[0])}
         <td style="padding:8px;border-bottom:1px solid var(--border)">${statusBadge(k.status)}</td>
         <td style="padding:8px;border-bottom:1px solid var(--border)" onclick="event.stopPropagation()">${k.evidence&&k.evidence.length?`<button class="btn btn-teal btn-xs" onclick="openEvidenceModal(${k.id})">&#128206; ${k.evidence.length}</button>`:'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
         <td style="padding:8px;border-bottom:1px solid var(--border)" onclick="event.stopPropagation()">
@@ -1920,7 +1911,11 @@ function renderTrendChart(){
   // Fallback: use nilai_bulan if no history
   if(!pts.length&&k.nilai_bulan){
     const QM={'Q1':['Januari','Februari','Maret'],'Q2':['April','Mei','Juni'],'Q3':['Juli','Agustus','September'],'Q4':['Oktober','November','Desember']};
-    Object.entries(QM).forEach(([q,ms])=>{ms.forEach(m=>{if(k.nilai_bulan[m])pts.push({bulan:m,periode:CUR_PERIOD,nilai:k.nilai_bulan[m],status:(k.status_bulan&&k.status_bulan[m])||k.status});});});
+    // Monthly: check the current month's data
+      const curMonth=getPeriodMonths()[0];
+      if(k.nilai_bulan[curMonth])pts.push({bulan:curMonth,periode:CUR_PERIOD,nilai:k.nilai_bulan[curMonth],status:(k.status_bulan&&k.status_bulan[curMonth])||k.status});
+      // Also include all historical months
+      Object.keys(k.nilai_bulan||{}).forEach(m=>{if(m!==curMonth&&k.nilai_bulan[m])pts.push({bulan:m,periode:CUR_PERIOD,nilai:k.nilai_bulan[m],status:(k.status_bulan&&k.status_bulan[m])||k.status});});
   }
   if(!pts.length&&k.nilai_aktual)pts=[{bulan:'Current',periode:CUR_PERIOD,nilai:k.nilai_aktual,status:k.status}];
   if(!pts.length){const el=document.getElementById('trend-chart');if(el)el.parentElement.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Belum ada data. Isi monitoring KRI untuk melihat trendline.</div>';return;}
@@ -2242,9 +2237,7 @@ function renderIsiKRI(){
       <th style="padding:10px 8px;text-align:center;font-size:10px;color:#22c55e;min-width:80px">GREEN &#10003;</th>
       <th style="padding:10px 8px;text-align:center;font-size:10px;color:#f59e0b;min-width:80px">AMBER &#9650;</th>
       <th style="padding:10px 8px;text-align:center;font-size:10px;color:#ef4444;min-width:80px">RED &#10007;</th>
-      <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:90px">${mLabels[0].toUpperCase()}<br><span style="font-size:9px;color:#94a3b8">nilai &amp; status</span></th>
-      <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:90px">${mLabels[1].toUpperCase()}<br><span style="font-size:9px;color:#94a3b8">nilai &amp; status</span></th>
-      <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:90px">${mLabels[2].toUpperCase()}<br><span style="font-size:9px;color:#94a3b8">nilai &amp; status</span></th>
+      <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:110px">${mLabels[0].toUpperCase()}<br><span style="font-size:9px;color:#94a3b8">nilai &amp; status</span></th>
       <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:80px">EVIDENCE</th>
       <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:80px">APPROVAL</th>
       <th style="padding:10px 8px;text-align:center;font-size:10px;min-width:90px">AKSI</th>
@@ -2304,7 +2297,7 @@ function renderIsiKRI(){
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center;color:#16a34a;font-size:11px;font-weight:500">${k.threshold_hijau||'—'}</td>
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center;color:#d97706;font-size:11px;font-weight:500">${k.threshold_kuning||'—'}</td>
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center;color:#dc2626;font-size:11px;font-weight:500">${k.threshold_merah||'—'}</td>
-      ${monthCell(0)}${monthCell(1)}${monthCell(2)}
+      ${monthCell(0)}
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center">
         <button class="btn btn-outline btn-xs" onclick="openEvidenceModal(${k.id})" title="Upload/Lihat Evidence" style="${evCt>0?'border-color:var(--teal);color:var(--teal)':''}">
           &#128206; ${evCt>0?evCt+' file':'Upload'}
@@ -2323,21 +2316,14 @@ function renderIsiKRI(){
   document.getElementById('isi-kri-content').innerHTML = html;
 }
 function onMonthInput(id, mIdx){
-  // auto-update the overall status based on worst month status
-  const k=KRI_DATA.find(x=>x.id===id);if(!k)return;
-  const months=getPeriodMonths();
-  const sts=[0,1,2].map(i=>document.getElementById('isi-st'+(i+1)+'-'+id)?.value||'');
-  const worst=sts.includes('Breach')?'Breach':sts.includes('Watch')?'Watch':sts.some(s=>s==='Normal')?'Normal':'';
-  const stEl=document.getElementById('isi-st'+(mIdx+1)+'-'+id);
-  if(stEl&&!stEl.value){/* leave it */}
+  // No-op for single month — value saved on saveIsiKRI
 }
 function onStatusInput(id, mIdx){
-  // Update row background based on worst status
+  // Update row background based on status
   const row=document.getElementById('isi-row-'+id);
   if(!row)return;
-  const sts=[0,1,2].map(i=>document.getElementById('isi-st'+(i+1)+'-'+id)?.value||'');
-  const worst=sts.includes('Breach')?'Breach':sts.includes('Watch')?'Watch':'Normal';
-  row.style.background=worst==='Breach'?'#fff5f5':worst==='Watch'?'#fffbeb':'#fff';
+  const st=document.getElementById('isi-st1-'+id)?.value||'';
+  row.style.background=st==='Breach'?'#fff5f5':st==='Watch'?'#fffbeb':'#fff';
 }
 
 function refreshEvModal(id,newPeriod){
@@ -2351,38 +2337,30 @@ function refreshEvModal(id,newPeriod){
 }
 function autoFillAktual(id){/* legacy no-op */}
 
-function saveIsiKRI(id){
+async function saveIsiKRI(id){
   const k=KRI_DATA.find(x=>x.id===id);if(!k)return;
-  const months=getPeriodMonths();
+  const months=getPeriodMonths(); // now returns [1 month]
   if(!k.nilai_bulan)k.nilai_bulan={};
   if(!k.status_bulan)k.status_bulan={};
-  const vals=[1,2,3].map(i=>document.getElementById('isi-m'+i+'-'+id)?.value||'');
-  const sts=[1,2,3].map(i=>document.getElementById('isi-st'+i+'-'+id)?.value||'');
-  const m1=vals[0],m2=vals[1],m3=vals[2];
-  months.forEach((m,i)=>{
-    if(vals[i])k.nilai_bulan[m]=vals[i];
-    if(sts[i])k.status_bulan[m]=sts[i];
-  });
-  // Worst month status becomes overall
-  const worst=sts.includes('Breach')?'Breach':sts.includes('Watch')?'Watch':sts.some(s=>s==='Normal')?'Normal':k.status;
-  const lastVal=m3||m2||m1||k.nilai_aktual;
+  const m = months[0];
+  const val = document.getElementById('isi-m1-'+id)?.value?.trim()||'';
+  const st  = document.getElementById('isi-st1-'+id)?.value||'';
+  if(val) k.nilai_bulan[m]=val;
+  if(st)  k.status_bulan[m]=st;
   const oldStatus=k.status;
-  k.nilai_aktual=lastVal;
-  k.status=worst||k.status;
-  if(k.approval_status==='Approved'&&k.status!==oldStatus)k.approval_status='Draft';
+  k.nilai_aktual = val||k.nilai_aktual;
+  k.status = st||k.status;
+  if(k.approval_status==='Approved'&&k.status!==oldStatus) k.approval_status='Draft';
   // Save to history
   const user=CURRENT_USER?CURRENT_USER.nama:'';
-  months.forEach((m,i)=>{
-    if(vals[i]){
-      KRI_HISTORY.unshift({hid:Date.now()+Math.random(),kri_id:id,kode:k.kode,nama:k.nama,periode:CUR_PERIOD,bulan:m,nilai:vals[i],status:sts[i]||k.status,catatan:k.catatan,user,ts:new Date().toLocaleString('id-ID')});
-    }
-  });
+  if(val){
+    KRI_HISTORY.unshift({hid:Date.now()+Math.random(),kri_id:id,kode:k.kode,nama:k.nama,periode:CUR_PERIOD,bulan:m,nilai:val,status:st||k.status,catatan:k.catatan,user,ts:new Date().toLocaleString('id-ID')});
+  }
   if(KRI_HISTORY.length>2000)KRI_HISTORY=KRI_HISTORY.slice(0,2000);
-  addTrail('EDIT',id,'Isi monitoring: '+k.kode+' ['+months.map((m,i)=>m.substr(0,3)+'='+vals[i]).join(', ')+']');
-  save();saveHistory();
+  addTrail('EDIT',id,'Isi monitoring: '+k.kode+' ['+m+'='+val+' status='+st+']');
+  await save(); saveHistory();
   const saved=document.getElementById('isi-saved-'+id);
   if(saved){saved.style.display='block';setTimeout(()=>saved.style.display='none',2000);}
-  // Update row background
   const row=document.getElementById('isi-row-'+id);
   if(row)row.style.background=k.status==='Breach'?'#fff5f5':k.status==='Watch'?'#fffbeb':'#fff';
   updateBadges();
@@ -2418,9 +2396,7 @@ function resubmitKRI(id){
     </div>
     <div style="font-size:13px;color:var(--text);line-height:1.6">
       Nilai yang tersimpan:<br>
-      <strong>April: ${(k.nilai_bulan&&k.nilai_bulan[getPeriodMonths()[0]])||'—'} &nbsp; 
-      Mei: ${(k.nilai_bulan&&k.nilai_bulan[getPeriodMonths()[1]])||'—'} &nbsp; 
-      Juni: ${(k.nilai_bulan&&k.nilai_bulan[getPeriodMonths()[2]])||'—'}</strong><br><br>
+      <strong>${getPeriodMonths()[0]}: ${(k.nilai_bulan&&k.nilai_bulan[getPeriodMonths()[0]])||'—'}</strong><br><br>
       Pastikan Anda sudah memperbaiki nilai/evidence sesuai catatan penolakan, lalu klik Resubmit.
     </div>`;
   document.getElementById('m-foot').innerHTML=`
