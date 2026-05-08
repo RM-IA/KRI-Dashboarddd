@@ -672,8 +672,13 @@ function switchRole(role){
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(){
   const all=KRI_DATA.filter(k=>!k.deleted&&isMyKRI(k));
-  const allDivisis=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.divisi).filter(Boolean))].sort();
-  const allKats=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.kategori_risiko).filter(Boolean))].sort();
+  // Complete static lists + any dynamic additions from KRI_DATA
+  const STATIC_CATS=['Pasar','Kredit','Likuiditas','Konsentrasi Efek','Operasional','Reputasi','Kepatuhan','Hukum','Strategis','Investasi (MI-level)'];
+  const STATIC_DIVS=['Investment & Research','Legal, Compliance & Anti Fraud','IT System','IT Digital Product','Fund Admin','Execution & Proprietary','HCD','General Affair','Accounting & Tax','Finance & Budget','RMPD','IIA','RMPD, IIA','APU PPT & PPPSPM','Risk Management & Internal Audit','Corporate Communication','Retail Marketing, IIA dan Corporate Communication'];
+  const dynamicCats=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.kategori_risiko).filter(Boolean))];
+  const dynamicDivs=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.divisi).filter(Boolean))];
+  const allDivisis=[...new Set([...STATIC_DIVS,...dynamicDivs])].sort();
+  const allKats=[...new Set([...STATIC_CATS,...dynamicCats])].sort();
   let filtered=all;
   if(DASH_STATUS_FILTER) filtered=filtered.filter(k=>k.status===DASH_STATUS_FILTER);
   if(DASH_DIVISI_FILTER) filtered=filtered.filter(k=>k.divisi===DASH_DIVISI_FILTER);
@@ -897,9 +902,11 @@ function openChartDrillDown(title,list,subtitle){
 
 // ── KRI TABLE PAGE ─────────────────────────────────────────────────────────────
 function buildFilters(containerId, type){
-  const cats=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.kategori_risiko))].sort();
+  const STATIC_CATS_BF=['Pasar','Kredit','Likuiditas','Konsentrasi Efek','Operasional','Reputasi','Kepatuhan','Hukum','Strategis','Investasi (MI-level)'];
+  const cats=[...new Set([...STATIC_CATS_BF,...KRI_DATA.filter(k=>!k.deleted).map(k=>k.kategori_risiko)])].sort();
+  const STATIC_DIVS_BF=['Investment & Research','Legal, Compliance & Anti Fraud','IT System','IT Digital Product','Fund Admin','Execution & Proprietary','HCD','General Affair','Accounting & Tax','Finance & Budget','RMPD','IIA','RMPD, IIA','APU PPT & PPPSPM','Risk Management & Internal Audit','Corporate Communication','Retail Marketing, IIA dan Corporate Communication'];
   const owners=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.risk_owner))].sort();
-  const divisis=[...new Set(KRI_DATA.filter(k=>!k.deleted).map(k=>k.divisi))].sort();
+  const divisis=[...new Set([...STATIC_DIVS_BF,...KRI_DATA.filter(k=>!k.deleted).map(k=>k.divisi)])].sort();
   const el=document.getElementById(containerId);if(!el)return;
   el.innerHTML=`
     <div class="srch"><svg width="13" height="13" fill="none" stroke="#94a3b8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><input type="text" id="f-search-${type}" placeholder="Cari KRI..." oninput="renderKRIPage('${type}')"></div>
@@ -2325,6 +2332,13 @@ function renderIsiKRI(){
   // Spreadsheet table - dark header like picture 2
   html += `<div style="background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:16px">
   <div style="overflow-x:auto">
+
+  // Tambah KRI button for all users
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:12px;color:var(--muted)">${filtered.length} parameter KRI</div>
+    <button class="btn btn-primary btn-sm" onclick="openAddKRIForUser()">+ Tambah Parameter KRI</button>
+  </div>`;
+
   <table style="width:100%;border-collapse:collapse;font-size:12px">
   <thead>
     <tr style="background:#1e293b;color:#e2e8f0">
@@ -2350,7 +2364,7 @@ function renderIsiKRI(){
 
     // Row background based on overall status
     const rowBg = k.status==='Breach'?'#fff5f5':k.status==='Watch'?'#fffbeb':'#fff';
-    const apBadge = k.approval_status==='Approved'?'<span style="color:#16a34a;font-weight:600;font-size:10px">&#10003; Approved</span>':
+    const apBadge = (k.approved_periods&&k.approved_periods[CUR_PERIOD])?'<span style="color:#16a34a;font-weight:600;font-size:10px">&#10003; Approved ('+CUR_PERIOD+')</span>':
       k.approval_status==='Pending Review'?'<span style="color:#d97706;font-weight:600;font-size:10px">&#9203; Pending</span>':
       k.approval_status==='Ditolak'?`<span style="color:#dc2626;font-weight:600;font-size:10px">&#10007; Ditolak</span>`:
       '<span style="color:#64748b;font-size:10px">Draft</span>';
@@ -2365,12 +2379,12 @@ function renderIsiKRI(){
       return `<td style="padding:6px 6px;text-align:center;background:${rowBg};border-bottom:1px solid var(--border)">
         <input type="text" id="isi-m${mIdx+1}-${k.id}" value="${v}" placeholder="—"
           oninput="onMonthInput(${k.id},${mIdx})"
-          ${k.approval_status==='Approved'?'disabled':''}
-          style="width:70px;text-align:center;padding:4px 6px;border:1.5px solid ${k.approval_status==='Approved'?'#d1d5db':'var(--border)'};border-radius:5px;font-size:12px;font-weight:600;${k.approval_status==='Approved'?'background:#f3f4f6;color:#6b7280;cursor:not-allowed':''}">
+          ${(k.approved_periods&&k.approved_periods[CUR_PERIOD])?'disabled':''}
+          style="width:70px;text-align:center;padding:4px 6px;border:1.5px solid ${(k.approved_periods&&k.approved_periods[CUR_PERIOD])?'#d1d5db':'var(--border)'};border-radius:5px;font-size:12px;font-weight:600;${(k.approved_periods&&k.approved_periods[CUR_PERIOD])?'background:#f3f4f6;color:#6b7280;cursor:not-allowed':''}">
         <div style="margin-top:4px">
           <select id="isi-st${mIdx+1}-${k.id}" onchange="onStatusInput(${k.id},${mIdx})"
-            ${k.approval_status==='Approved'?'disabled':''}
-            style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:${stColor};font-weight:600;width:80px;${k.approval_status==='Approved'?'background:#f3f4f6;cursor:not-allowed':''}">
+            ${(k.approved_periods&&k.approved_periods[CUR_PERIOD])?'disabled':''}
+            style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:${stColor};font-weight:600;width:80px;${(k.approved_periods&&k.approved_periods[CUR_PERIOD])?'background:#f3f4f6;cursor:not-allowed':''}">
             <option value="" ${!st?'selected':''} style="color:#64748b">— status</option>
             <option value="Normal" ${st==='Normal'?'selected':''} style="color:#16a34a">&#128994; Normal</option>
             <option value="Watch" ${st==='Watch'?'selected':''} style="color:#d97706">&#128993; Watch</option>
@@ -2575,19 +2589,9 @@ async function initDashboard(){
   document.getElementById('kri-entity-filters').innerHTML='';
   document.getElementById('kri-ops-filters').innerHTML='';
 
-  // Coba restore session dari localStorage agar tidak logout saat refresh
-  const savedSession = localStorage.getItem('kri_session');
-  if(savedSession){
-    try{
-      const sess = JSON.parse(savedSession);
-      const found = USERS.find(u=>u.username===sess.username&&u.password===sess.password&&(u.aktif===true||u.aktif==='true'||u.aktif===1||u.aktif===undefined||u.aktif===null));
-      if(found){
-        activateUser(found);
-        return; // Sudah login, skip halaman login
-      }
-    }catch(e){}
-  }
-  // Tidak ada session — tampilkan halaman login
+  // Session restore DISABLED — user wajib login manual setiap kali buka halaman
+  localStorage.removeItem('kri_session');
+  // Tampilkan halaman login
   document.getElementById('login-page').style.display='flex';
   document.getElementById('main-shell').style.display='none';
 }
