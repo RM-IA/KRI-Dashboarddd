@@ -474,7 +474,7 @@ async function save(){
   try{
     if(!db){ localStorage.setItem('kri_v4', JSON.stringify(KRI_DATA)); return; }
     // Upsert semua KRI_DATA ke Supabase
-    const payload = KRI_DATA.map(k=>({...k, updated_by: CURRENT_USER?CURRENT_USER.nama:'', updated_at: new Date().toISOString(), tl_approval_status:k.tl_approval_status||'', tl_approved_by:k.tl_approved_by||'', tl_approved_date:k.tl_approved_date||'', tl_reject_reason:k.tl_reject_reason||'', nilai_bulan:k.nilai_bulan||{}, status_bulan:k.status_bulan||{}, submitted_by:k.submitted_by||'', submit_ts:k.submit_ts||'', approve_ts:k.approve_ts||''}));
+    const payload = KRI_DATA.map(k=>({...k, updated_by: CURRENT_USER?CURRENT_USER.nama:'', updated_at: new Date().toISOString(), tl_approval_status:k.tl_approval_status||'', tl_approved_by:k.tl_approved_by||'', tl_approved_date:k.tl_approved_date||'', tl_reject_reason:k.tl_reject_reason||'', nilai_bulan:k.nilai_bulan||{}, status_bulan:k.status_bulan||{}, submitted_by:k.submitted_by||'', submit_ts:k.submit_ts||'', approve_ts:k.approve_ts||'', approved_periods:k.approved_periods||{}}));
     const {error} = await db.from('kri_data').upsert(payload, {onConflict:'id'});
     if(error) console.error('Supabase save error:',error);
     // Simpan audit trail terbaru
@@ -1350,8 +1350,10 @@ async function doApproveKRI(id){
   k.approval_status='Approved';
   k.approved_by=CURRENT_USER?CURRENT_USER.nama:'Risk Manager';
   k.approved_date=new Date().toLocaleDateString('id-ID');
-  // Preserve all data when approving — only change approval fields
   k.approve_ts=new Date().toLocaleString('id-ID');
+  // Lock this specific period — other periods remain editable
+  if(!k.approved_periods) k.approved_periods={};
+  k.approved_periods[CUR_PERIOD]=true;
   addTrail('APPROVE',id,'Approve KRI: '+k.kode+' oleh '+(CURRENT_USER?CURRENT_USER.nama:'RM'));
   await save();closeModal();
   toast('✅ KRI '+k.kode+' diapprove oleh '+(CURRENT_USER?CURRENT_USER.nama:'RM'));
@@ -1566,6 +1568,7 @@ async function unapproveKRI(id){
   const bulan = k.approve_ts ? ' (diapprove: '+k.approve_ts+')' : (k.approved_date ? ' ('+k.approved_date+')' : '');
   if(!confirm('Batalkan approval untuk '+k.kode+bulan+'?\nKRI akan dikembalikan ke Risk Owner untuk diisi ulang.'))return;
   k.approval_status='Draft';
+  if(k.approved_periods) delete k.approved_periods[CUR_PERIOD];
   k.approved_by='';
   k.approved_date='';
   k.approve_ts='';
@@ -1960,6 +1963,69 @@ function renderTrendChart(){
   window._trendChart=new Chart(el,{type:'line',data:{labels,datasets:[{label:k.kode+' — '+k.nama.substr(0,30),data:vals,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',pointBackgroundColor:colors,pointBorderColor:colors,pointRadius:5,tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
 }
 
+
+function openAddKRIForUser(){
+  const myDivisi = CURRENT_USER?CURRENT_USER.divisi:'';
+  const myName = CURRENT_USER?CURRENT_USER.nama:'';
+  const cats=['Pasar','Kredit','Likuiditas','Konsentrasi Efek','Operasional','Reputasi','Kepatuhan','Hukum','Strategis','Investasi (MI-level)'];
+
+  document.getElementById('modal-box').className='modal modal-lg';
+  document.getElementById('m-title').textContent='Tambah Parameter KRI Baru';
+  document.getElementById('m-body').innerHTML=`<div class="grid3">
+    <div class="fg"><label>Kode KRI *</label><input type="text" id="f-kode-user" placeholder="KRI-XX"></div>
+    <div class="fg"><label>Kategori Risiko *</label><select id="f-kategori-user">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
+    <div class="fg"><label>Level *</label><select id="f-level-user"><option value="Entity">Entity Level</option><option value="Operational" selected>Operational</option></select></div>
+    <div class="fg span3"><label>Nama KRI *</label><input type="text" id="f-nama-user" placeholder="Nama parameter KRI..."></div>
+    <div class="fg"><label>Divisi</label><input type="text" id="f-divisi-user" value="${myDivisi}" disabled style="background:#f3f4f6;color:#6b7280"></div>
+    <div class="fg"><label>Risk Owner</label><input type="text" id="f-owner-user" value="${myName}" disabled style="background:#f3f4f6;color:#6b7280"></div>
+    <div class="fg"><label>Sifat KRI</label><select id="f-sifat-user"><option>Exposure</option><option>Control</option><option>Outcome</option></select></div>
+    <div class="fg"><label>Impact</label><select id="f-impact-user"><option>High</option><option>Medium</option><option>Low</option></select></div>
+    <div class="fg"><label>Scope</label><select id="f-scope-user"><option>Company-wide</option><option>Lokal-Divisi</option><option>Cross-Divisi</option></select></div>
+    <div class="fg"><label>🟢 Green (Normal)</label><input type="text" id="f-green-user" placeholder="Diisi oleh Risk Manager" disabled style="background:#f3f4f6;color:#6b7280;cursor:not-allowed"></div>
+    <div class="fg"><label>🟡 Amber (Watch)</label><input type="text" id="f-amber-user" placeholder="Diisi oleh Risk Manager" disabled style="background:#f3f4f6;color:#6b7280;cursor:not-allowed"></div>
+    <div class="fg"><label>🔴 Red (Breach)</label><input type="text" id="f-red-user" placeholder="Diisi oleh Risk Manager" disabled style="background:#f3f4f6;color:#6b7280;cursor:not-allowed"></div>
+    <div class="fg span3"><label>Alasan & Basis Klasifikasi</label><textarea id="f-alasan-user" placeholder="Jelaskan kenapa KRI ini penting..."></textarea></div>
+  </div>`;
+  document.getElementById('m-foot').innerHTML=`<button class="btn btn-outline" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveAddKRIForUser()">💾 Simpan KRI</button>`;
+  document.getElementById('mover').classList.add('open');
+}
+
+async function saveAddKRIForUser(){
+  const kode=document.getElementById('f-kode-user')?.value?.trim();
+  const nama=document.getElementById('f-nama-user')?.value?.trim();
+  if(!kode||!nama){toast('Kode dan Nama KRI wajib diisi!');return;}
+  const myDivisi=CURRENT_USER?CURRENT_USER.divisi:'';
+  const myName=CURRENT_USER?CURRENT_USER.nama:'';
+  const id=Math.max(0,...KRI_DATA.map(k=>k.id))+1;
+  const rec={
+    id,kode,nama,
+    kategori_risiko:document.getElementById('f-kategori-user')?.value||'Operasional',
+    level:document.getElementById('f-level-user')?.value||'Operational',
+    divisi:myDivisi,  // locked to user's divisi
+    risk_owner:myName, // locked to user's name
+    sifat_kri:document.getElementById('f-sifat-user')?.value||'Control',
+    impact:document.getElementById('f-impact-user')?.value||'Medium',
+    scope:document.getElementById('f-scope-user')?.value||'Lokal-Divisi',
+    threshold_hijau:document.getElementById('f-green-user')?.value||'',
+    threshold_kuning:document.getElementById('f-amber-user')?.value||'',
+    threshold_merah:document.getElementById('f-red-user')?.value||'',
+    alasan:document.getElementById('f-alasan-user')?.value||'',
+    nilai_aktual:'',status:'Normal',tren:'Stabil',catatan:'',
+    approval_status:'Draft',approved_by:'',approved_date:'',reject_reason:'',
+    evidence:[],tindak_lanjut:'',status_tl:'',due_date_tl:'',pic_tl:'',
+    tl_approval_status:'',tl_approved_by:'',tl_approved_date:'',tl_reject_reason:'',
+    submitted_by:'',submit_ts:'',approve_ts:'',
+    nilai_bulan:{},status_bulan:{},approved_periods:{},
+    deleted:false
+  };
+  KRI_DATA.push(rec);
+  addTrail('CREATE',id,'Tambah KRI oleh user: '+kode+' — '+nama+' ('+myDivisi+')');
+  await save();
+  closeModal();
+  toast('✅ KRI '+kode+' berhasil ditambahkan');
+  renderCurrentPage();updateBadges();
+}
+
 function closeModal(){
   document.getElementById('mover').classList.remove('open');
   document.getElementById('modal-box').className='modal';
@@ -2333,11 +2399,11 @@ function renderIsiKRI(){
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center;color:#dc2626;font-size:11px;font-weight:500">${k.threshold_merah||'—'}</td>
       ${monthCell(0)}
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center">
-        ${k.approval_status==='Approved'&&!isRM()?(evCt>0?`<button class="btn btn-outline btn-xs" onclick="openEvidenceModal(${k.id})" title="Lihat Evidence" style="border-color:var(--teal);color:var(--teal)">&#128206; ${evCt} file</button>`:'<span style="color:#94a3b8;font-size:10px">🔒</span>'):`<button class="btn btn-outline btn-xs" onclick="openEvidenceModal(${k.id})" title="Upload/Lihat Evidence" style="${evCt>0?'border-color:var(--teal);color:var(--teal)':''}">&#128206; ${evCt>0?evCt+' file':'Upload'}</button>`}
+        ${(k.approved_periods&&k.approved_periods[CUR_PERIOD])&&!isRM()?(evCt>0?`<button class="btn btn-outline btn-xs" onclick="openEvidenceModal(${k.id})" title="Lihat Evidence" style="border-color:var(--teal);color:var(--teal)">&#128206; ${evCt} file</button>`:'<span style="color:#94a3b8;font-size:10px">🔒</span>'):`<button class="btn btn-outline btn-xs" onclick="openEvidenceModal(${k.id})" title="Upload/Lihat Evidence" style="${evCt>0?'border-color:var(--teal);color:var(--teal)':''}">&#128206; ${evCt>0?evCt+' file':'Upload'}</button>`}
       </td>
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center">${apBadge}</td>
       <td style="padding:8px 8px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap">
-        ${k.approval_status==='Approved'?'<span style="color:#16a34a;font-size:10px;font-weight:600">🔒 Final</span>':`<button class="btn btn-green btn-xs" onclick="saveIsiKRI(${k.id})" title="Simpan">&#10003;</button>`}
+        ${(k.approved_periods&&k.approved_periods[CUR_PERIOD])?'<span style="color:#16a34a;font-size:10px;font-weight:600">🔒 Final</span>':`<button class="btn btn-green btn-xs" onclick="saveIsiKRI(${k.id})" title="Simpan">&#10003;</button>`}
         ${k.approval_status==='Draft'?`<button class="btn btn-amber btn-xs" onclick="submitApproval(${k.id})" title="Submit ke RM" style="margin-top:2px">&#128228;</button>`:''}
         ${k.approval_status==='Ditolak'?`<button class="btn btn-purple btn-xs" onclick="resubmitKRI(${k.id})" title="Resubmit" style="margin-top:2px">&#128257;</button>`:''}
         <div id="isi-saved-${k.id}" style="display:none;color:#16a34a;font-size:10px;margin-top:2px;font-weight:600">&#10003; Saved</div>
