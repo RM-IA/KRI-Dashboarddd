@@ -286,7 +286,7 @@ tr.clickable-row:hover{background:var(--blue-l)!important}
     <div class="nav-sep"></div>
     <div class="nav-grp">
       <div class="nav-lbl">KRI Management</div>
-      <div class="nav-it" id="nav-kri-all" onclick="showPage('kri-all')">
+      <div class="nav-it" id="nav-kri-all" onclick="showPage('kri-all')" style="${isRM()?'':'display:none'}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
         Semua Parameter KRI
       </div>
@@ -535,12 +535,12 @@ function startRealtimeSync(){
       const {data} = await db.from('kri_data').select('*').eq('deleted',false);
       if(data && data.length>0){
         KRI_DATA = data;
-        renderCurrentPage();
+        renderCurrentPage(); // re-render halaman aktif (termasuk approval page)
         updateBadges();
         const updatedBy = payload.new?.updated_by||'';
         const myName = CURRENT_USER?CURRENT_USER.nama:'';
         if(updatedBy && updatedBy!==myName){
-          showToastInfo('🔄 Data diperbarui oleh '+updatedBy);
+          showToastInfo('🔄 '+updatedBy+' baru saja update data');
         }
       }
     })
@@ -636,7 +636,7 @@ function updateBadges(){
   const pending=KRI_DATA.filter(k=>!k.deleted&&k.approval_status==='Pending Review').length;
   const el=document.getElementById('badge-approval');if(el){el.textContent=pending;el.style.display=pending?'':'none';}
   // TL badge: filter by user's KRI only
-  const myTL=isRM()?KRI_DATA.filter(k=>!k.deleted&&(k.status==='Watch'||k.status==='Breach')):KRI_DATA.filter(k=>!k.deleted&&(k.status==='Watch'||k.status==='Breach')&&isMyKRI(k));
+  const myTL=isRM()?KRI_DATA.filter(k=>!k.deleted&&(k.status==='Watch'||k.status==='Breach')&&k.tindak_lanjut):KRI_DATA.filter(k=>!k.deleted&&(k.status==='Watch'||k.status==='Breach')&&isMyKRI(k)&&k.tindak_lanjut);
   const tlCount=myTL.filter(k=>k.status_tl!=='Selesai').length;
   // Also count TL pending approval for RM
   const tlPending=isRM()?KRI_DATA.filter(k=>!k.deleted&&k.tl_approval_status==='Pending Review').length:0;
@@ -1103,7 +1103,6 @@ function openKRIForm(id){
     <div class="fg"><label>🔴 Threshold Breach</label><input type="text" id="f-red" value="${k?k.threshold_merah:''}"></div>
     <div class="fg"><label>Nilai Aktual</label><input type="text" id="f-aktual" value="${k?k.nilai_aktual:''}"></div>
     <div class="fg"><label>Status</label><select id="f-status"><option${!k||k.status==='Normal'?' selected':''}>Normal</option><option${k&&k.status==='Watch'?' selected':''}>Watch</option><option${k&&k.status==='Breach'?' selected':''}>Breach</option></select></div>
-    <div class="fg"><label>Tren</label><select id="f-tren"><option${!k||k.tren==='Stabil'?' selected':''}>Stabil</option><option${k&&k.tren==='Meningkat'?' selected':''}>Meningkat</option><option${k&&k.tren==='Menurun'?' selected':''}>Menurun</option><option${k&&k.tren==='Membaik'?' selected':''}>Membaik</option></select></div>
     <div class="fg"><label>Jenis Pengajuan</label><select id="f-jenis-pengajuan"><option${!k||k.jenis_pengajuan==='Baru'?' selected':''} value="Baru">🆕 Baru</option><option${k&&k.jenis_pengajuan==='Revisi'?' selected':''} value="Revisi">✏️ Revisi</option></select></div>
     <div class="fg"><label>Versi</label><input type="text" id="f-versi" value="${k?k.versi||'v1':''}" placeholder="v1, v2..."></div>
     <div class="fg"></div>
@@ -1122,7 +1121,7 @@ function saveKRIForm(){
   const existing=isEdit?list.find(k=>k.id===id):null;
   // Poin 3: enforce divisi for non-RM
   const divisiVal = isRM() ? gv('f-divisi') : (CURRENT_USER ? CURRENT_USER.divisi : gv('f-divisi'));
-  const rec={id,kode,nama,kategori_risiko:gv('f-kategori'),level:gv('f-level'),divisi:divisiVal,risk_owner:gv('f-owner'),sifat_kri:gv('f-sifat'),impact:gv('f-impact'),scope:gv('f-scope'),threshold_hijau:gv('f-green'),threshold_kuning:gv('f-amber'),threshold_merah:gv('f-red'),nilai_aktual:gv('f-aktual'),status:gv('f-status'),tren:gv('f-tren'),alasan:gv('f-alasan'),catatan:gv('f-catatan'),periode:CUR_PERIOD,approval_status:existing?existing.approval_status:'Draft',approved_by:existing?.approved_by||'',approved_date:existing?.approved_date||'',reject_reason:existing?.reject_reason||'',evidence:existing?.evidence||[],tindak_lanjut:existing?.tindak_lanjut||'',status_tl:existing?.status_tl||'',due_date_tl:existing?.due_date_tl||'',pic_tl:existing?.pic_tl||'',deleted:false};
+  const rec={id,kode,nama,kategori_risiko:gv('f-kategori'),level:gv('f-level'),divisi:divisiVal,risk_owner:gv('f-owner'),sifat_kri:gv('f-sifat'),impact:gv('f-impact'),scope:gv('f-scope'),threshold_hijau:gv('f-green'),threshold_kuning:gv('f-amber'),threshold_merah:gv('f-red'),nilai_aktual:gv('f-aktual'),status:gv('f-status'),alasan:gv('f-alasan'),catatan:gv('f-catatan'),periode:CUR_PERIOD,approval_status:existing?existing.approval_status:'Draft',approved_by:existing?.approved_by||'',approved_date:existing?.approved_date||'',reject_reason:existing?.reject_reason||'',evidence:existing?.evidence||[],tindak_lanjut:existing?.tindak_lanjut||'',status_tl:existing?.status_tl||'',due_date_tl:existing?.due_date_tl||'',pic_tl:existing?.pic_tl||'',deleted:false};
   const idx=list.findIndex(k=>k.id===id);
   if(idx>=0)list[idx]=rec;else list.push(rec);
   addTrail(isEdit?'EDIT':'CREATE',id,`${isEdit?'Edit':'Tambah'} KRI: ${rec.kode} — ${rec.nama}`);
@@ -1170,7 +1169,6 @@ function openEditValueModal(id){
   <div class="grid2">
     <div class="fg"><label>Posisi Terkini (diisi otomatis dari bulan terakhir)</label><input type="text" id="qv-aktual" value="${k.nilai_aktual||''}" placeholder="Atau isi manual"></div>
     <div class="fg"><label>Status</label><select id="qv-status"><option${k.status==='Normal'?' selected':''}>Normal</option><option${k.status==='Watch'?' selected':''}>Watch</option><option${k.status==='Breach'?' selected':''}>Breach</option></select></div>
-    <div class="fg"><label>Tren</label><select id="qv-tren"><option${k.tren==='Stabil'?' selected':''}>Stabil</option><option${k.tren==='Meningkat'?' selected':''}>Meningkat</option><option${k.tren==='Menurun'?' selected':''}>Menurun</option><option${k.tren==='Membaik'?' selected':''}>Membaik</option></select></div>
     <div class="fg"><label>Catatan</label><input type="text" id="qv-catatan" value="${k.catatan||''}"></div>
   </div>`;
   // Auto-fill posisi terkini from month input
@@ -1187,7 +1185,7 @@ async function saveQuickValue(id){
   if(m1) k.nilai_bulan[months[0]]=m1;
   const lastVal=m1||gv('qv-aktual');
   const oldStatus=k.status;
-  k.nilai_aktual=lastVal;k.status=gv('qv-status');k.tren=gv('qv-tren');k.catatan=gv('qv-catatan');
+  k.nilai_aktual=lastVal;k.status=gv('qv-status');k.catatan=gv('qv-catatan');
   if(m1) k.status_bulan[months[0]]=k.status;
   if(k.approval_status==='Approved'&&k.status!==oldStatus)k.approval_status='Draft';
   addTrail('EDIT',id,`Update nilai ${k.kode}: ${months[0]}:${m1||'-'} (${k.status})`);
@@ -1207,6 +1205,16 @@ function deleteKRI(id){
 // ── EVIDENCE ──────────────────────────────────────────────────────────────────
 function openEvidenceModal(id){
   const k=KRI_DATA.find(x=>x.id===id);if(!k)return;
+  // Merge localStorage cached dataUrls into current evidence list
+  try{
+    const cached=JSON.parse(localStorage.getItem('ev_'+id)||'[]');
+    if(cached.length){
+      k.evidence=(k.evidence||[]).map(ev=>{
+        const c=cached.find(x=>x.name===ev.name);
+        return c?{...ev,dataUrl:c.dataUrl||ev.dataUrl}:ev;
+      });
+    }
+  }catch(e){}
   const canUpload=isRM()||isMyKRI(k);
   document.getElementById('modal-box').className='modal modal-sm';
   document.getElementById('m-title').textContent=`Evidence — ${k.kode}`;
@@ -1215,7 +1223,7 @@ function openEvidenceModal(id){
         body+=`<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:var(--navy);margin-bottom:6px">${k.evidence.length} file tersimpan</div>`;
     k.evidence.forEach(function(ev,i){
       var icon=ev.type&&ev.type.indexOf('image')>=0?'\uD83D\uDDBC':ev.type==='application/pdf'?'\uD83D\uDCC1':'\uD83D\uDCC4';
-      var openBtn=ev.dataUrl?'<button class="btn btn-teal btn-xs" onclick="openEvidence(\''+ev.name.replace(/'/g,"\\'")+'\')" style="margin-right:4px">&#128065; Buka</button>':'<span style="font-size:10px;color:var(--muted)">upload ulang</span>';
+      var openBtn=ev.dataUrl||ev.url?'<button class="btn btn-teal btn-xs" onclick="openEvidence(\''+ev.name.replace(/'/g,"\\'")+'\','+id+')" style="margin-right:4px">&#128065; Buka</button>':'<span style="font-size:10px;color:var(--muted)">upload ulang</span>';
       var delBtn=(isRM()||isMyKRI(k))?'<button class="btn btn-red btn-xs" onclick="removeEv('+id+','+i+')">&#10005;</button>':'';
       body+=`<div class="ev-item">${icon} <span style="flex:1;font-weight:500">${ev.name}</span><span style="color:var(--muted);font-size:10.5px">${ev.size}</span><span style="color:var(--muted);font-size:10px;margin-left:4px">${ev.date}</span>${openBtn}${delBtn}</div>`;
     });
@@ -1232,21 +1240,33 @@ function handleEvUpload(event,id){
   const files=[...event.target.files];
   if(!files.length)return;
   let done=0;
-  toast('Uploading '+files.length+' file...');
-  files.forEach(async function(f){
-    try{
-      const path='kri-'+id+'/'+Date.now()+'_'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-      const {data,error}=await db.storage.from('kri-evidence').upload(path,f,{upsert:true});
-      if(error){console.error('Upload error:',error);toast('Gagal upload: '+f.name);return;}
-      const {data:urlData}=db.storage.from('kri-evidence').getPublicUrl(path);
-      const publicUrl=urlData?.publicUrl||'';
-      k.evidence.push({name:f.name,size:(f.size/1024).toFixed(0)+'KB',date:new Date().toLocaleDateString('id-ID'),type:f.type,url:publicUrl,path:path});
-      // Also save to evidence_files table
-      await db.from('evidence_files').insert({kri_id:id,file_name:f.name,file_size:(f.size/1024).toFixed(0)+'KB',file_type:f.type,storage_path:path,uploaded_by:CURRENT_USER?CURRENT_USER.nama:'',periode:CUR_PERIOD});
+  toast('Mengupload '+files.length+' file...');
+  files.forEach(function(f){
+    const reader=new FileReader();
+    reader.onload=async function(e){
+      const dataUrl=e.target.result;
+      // Try Supabase Storage first, fallback to base64
+      let publicUrl='';
+      try{
+        const path='kri-'+id+'/'+Date.now()+'_'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+        const {data,error}=await db.storage.from('kri-evidence').upload(path,f,{upsert:true});
+        if(!error){
+          const {data:urlData}=db.storage.from('kri-evidence').getPublicUrl(path);
+          publicUrl=urlData?.publicUrl||'';
+        }
+      }catch(e2){/* Storage not available, use base64 */}
+      k.evidence.push({name:f.name,size:(f.size/1024).toFixed(0)+'KB',date:new Date().toLocaleDateString('id-ID'),type:f.type,url:publicUrl,dataUrl:dataUrl});
       addTrail('UPLOAD',id,'Upload evidence: '+f.name+' ('+k.kode+')');
       done++;
-      if(done===files.length){save();toast('✅ '+files.length+' file berhasil diupload ke cloud');openEvidenceModal(id);}
-    }catch(e){console.error(e);toast('Error: '+e.message);}
+      if(done===files.length){
+        // Save to localStorage for same-browser access
+        try{localStorage.setItem('ev_'+id,JSON.stringify(k.evidence));}catch(e3){}
+        await save();
+        toast('✅ '+files.length+' file berhasil diupload');
+        openEvidenceModal(id);
+      }
+    };
+    reader.readAsDataURL(f);
   });
 }
 function handleEvDrop(event,id){
@@ -1301,6 +1321,8 @@ function doSubmitApproval(id){
   k.approval_status='Pending Review';
   k.submit_ts=new Date().toLocaleString('id-ID');
   k.submitted_by=CURRENT_USER?CURRENT_USER.nama:'';
+  k.updated_by=CURRENT_USER?CURRENT_USER.nama:'';
+  k.updated_at=new Date().toISOString();
   addTrail('SUBMIT',id,'Submit approval: '+k.kode+' oleh '+(CURRENT_USER?CURRENT_USER.nama:''));
   save();closeModal();toast('KRI '+k.kode+' berhasil disubmit ke Risk Manager');renderCurrentPage();updateBadges();
 }
@@ -1545,9 +1567,12 @@ async function unapproveKRI(id){
   k.nilai_bulan={};
   k.status_bulan={};
   k.nilai_aktual='';
-  addTrail('UNAPPROVE',id,'Unapprove KRI: '+k.kode+' — dikembalikan ke Risk Owner');
-  await save();
-  toast('↩ KRI '+k.kode+' dikembalikan ke Draft');
+  k.status='Normal'; // reset status
+  k.updated_by=CURRENT_USER?CURRENT_USER.nama:'admin';
+  k.updated_at=new Date().toISOString();
+  addTrail('UNAPPROVE',id,'Unapprove KRI: '+k.kode+' — dikembalikan ke Risk Owner untuk diisi ulang');
+  await save(); // triggers realtime → risk owner's dashboard auto-updates
+  toast('↩ KRI '+k.kode+' dikembalikan ke Draft — Risk Owner akan menerima update');
   renderApproval();
   updateBadges();
 }
@@ -2281,7 +2306,7 @@ function renderIsiKRI(){
     };
 
     html += `<tr style="background:${rowBg}" id="isi-row-${k.id}">
-      <td style="padding:8px 10px;border-bottom:1px solid var(--border);color:#64748b;font-weight:600">${k.id}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid var(--border);color:#64748b;font-weight:600">${idx+1}</td>
       <td style="padding:8px 10px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;flex-wrap:wrap">
           <span style="background:#1e293b;color:#e2e8f0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">${k.kategori_risiko.toUpperCase().substr(0,6)}</span>
