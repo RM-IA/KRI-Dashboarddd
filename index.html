@@ -2329,16 +2329,15 @@ function renderIsiKRI(){
     document.getElementById('isi-kri-content').innerHTML=html;return;
   }
 
-  // Spreadsheet table - dark header like picture 2
-  html += `<div style="background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:16px">
-  <div style="overflow-x:auto">
-
   // Tambah KRI button for all users
   html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <div style="font-size:12px;color:var(--muted)">${filtered.length} parameter KRI</div>
     <button class="btn btn-primary btn-sm" onclick="openAddKRIForUser()">+ Tambah Parameter KRI</button>
   </div>`;
 
+  // Spreadsheet table - dark header like picture 2
+  html += `<div style="background:#fff;border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:16px">
+  <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:12px">
   <thead>
     <tr style="background:#1e293b;color:#e2e8f0">
